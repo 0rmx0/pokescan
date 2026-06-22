@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PokéScan — Côtes Cardmarket</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0A0A14;
+    --surface:   #12121F;
+    --card-bg:   #1A1A2E;
+    --border:    #2A2A45;
+    --yellow:    #FFD700;
+    --purple:    #A855F7;
+    --teal:      #2DD4BF;
+    --text:      #E8E8F0;
+    --muted:     #6B6B8A;
+    --danger:    #F87171;
+    --radius:    16px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: conic-gradient(from 180deg, var(--yellow), var(--purple), var(--teal), var(--yellow));
+    border-radius: 50%;
+    animation: spin 8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  header h1 span { color: var(--yellow); }
+  .badge {
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(168,85,247,0.15);
+    color: var(--purple);
+    border: 1px solid rgba(168,85,247,0.3);
+    padding: 4px 10px;
+    border-radius: 100px;
+  }
+
+  /* ── Main layout ── */
+  main {
+    width: 100%;
+    max-width: 520px;
+    padding: 28px 20px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── Scanner zone ── */
+  .scanner-zone {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3/4;
+    max-height: 400px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #videoEl, #previewImg {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+  #videoEl.active, #previewImg.active { display: block; }
+
+  .scanner-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding: 20px;
+  }
+  .scanner-idle.hidden { display: none; }
+  .idle-icon {
+    width: 64px; height: 64px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  .scanner-idle p { font-size: 0.85rem; line-height: 1.5; }
+
+  /* Holographic overlay corners */
+  .corner {
+    position: absolute;
+    width: 28px; height: 28px;
+    border-color: var(--yellow);
+    border-style: solid;
+    opacity: 0.8;
+    pointer-events: none;
+  }
+  .corner.tl { top: 14px; left: 14px; border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+  .corner.tr { top: 14px; right: 14px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+  .corner.bl { bottom: 14px; left: 14px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+  .corner.br { bottom: 14px; right: 14px; border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+
+  /* Scanning animation */
+  .scan-line {
+    position: absolute;
+    left: 14px; right: 14px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--yellow), var(--teal), transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .scan-line.active {
+    opacity: 1;
+    animation: scanMove 1.8s ease-in-out infinite;
+  }
+  @keyframes scanMove {
+    0%   { top: 14px; }
+    50%  { top: calc(100% - 16px); }
+    100% { top: 14px; }
+  }
+
+  /* ── Controls ── */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--yellow);
+    color: #0A0A14;
+    grid-column: 1 / -1;
+  }
+  .btn-secondary {
+    background: var(--card-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-capture {
+    background: var(--purple);
+    color: #fff;
+  }
+
+  /* Upload label styled as button */
+  .btn-upload {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--card-bg);
+    transition: opacity 0.2s, transform 0.15s;
+    text-align: center;
+  }
+  .btn-upload:active { transform: scale(0.97); }
+  #fileInput { display: none; }
+
+  /* ── Result card ── */
+  .result-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: none;
+  }
+  .result-card.visible { display: block; }
+  .result-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .result-header .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+    flex-shrink: 0;
+  }
+  .result-header h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .result-body { padding: 20px; }
+  .card-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .card-set {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  .price-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .price-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .price-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .price-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--yellow);
+  }
+  .price-item.highlight {
+    border-color: rgba(255,215,0,0.3);
+    background: rgba(255,215,0,0.05);
+  }
+  .price-item.highlight .price-value { color: var(--yellow); }
+
+  .cardmarket-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 16px;
+    background: rgba(45,212,191,0.08);
+    border: 1px solid rgba(45,212,191,0.25);
+    border-radius: 10px;
+    color: var(--teal);
+    text-decoration: none;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  .cardmarket-link:hover { background: rgba(45,212,191,0.14); }
+
+  /* ── Status / loading ── */
+  .status-box {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: none;
+    align-items: center;
+    gap: 14px;
+  }
+  .status-box.visible { display: flex; }
+  .spinner {
+    width: 22px; height: 22px;
+    border: 2px solid var(--border);
+    border-top-color: var(--purple);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  .status-text { font-size: 0.88rem; color: var(--muted); }
+
+  /* ── Error ── */
+  .error-box {
+    background: rgba(248,113,113,0.07);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    font-size: 0.85rem;
+    color: var(--danger);
+    display: none;
+  }
+  .error-box.visible { display: block; }
+
+  /* ── Info text ── */
+  .info-note {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+    padding: 0 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark"></div>
+  <h1>Poké<span>Scan</span></h1>
+  <span class="badge">Cardmarket</span>
+</header>
+
+<main>
+  <!-- Scanner zone -->
+  <div class="scanner-zone" id="scannerZone">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+    <div class="scan-line" id="scanLine"></div>
+
+    <video id="videoEl" autoplay playsinline muted></video>
+    <img id="previewImg" alt="Carte capturée" />
+    <canvas id="captureCanvas" style="display:none"></canvas>
+
+    <div class="scanner-idle" id="scannerIdle">
+      <div class="idle-icon">🎴</div>
+      <p>Active la caméra ou importe<br>une photo de ta carte Pokémon</p>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-secondary" id="btnCamera" onclick="toggleCamera()">📷 Caméra</button>
+    <label class="btn-upload" for="fileInput">🖼️ Importer</label>
+    <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(event)">
+    <button class="btn btn-capture" id="btnCapture" onclick="capture()" disabled>⚡ Analyser</button>
+    <button class="btn btn-secondary" id="btnReset" onclick="reset()" style="display:none">↩ Réinitialiser</button>
+  </div>
+
+  <!-- Status -->
+  <div class="status-box" id="statusBox">
+    <div class="spinner"></div>
+    <span class="status-text" id="statusText">Analyse en cours…</span>
+  </div>
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div class="dot"></div>
+      <h2>Résultat</h2>
+    </div>
+    <div class="result-body">
+      <div class="card-name" id="cardName">—</div>
+      <div class="card-set" id="cardSet">—</div>
+      <div class="price-grid">
+        <div class="price-item">
+          <div class="price-label">Bas</div>
+          <div class="price-value" id="priceLow">—</div>
+        </div>
+        <div class="price-item highlight">
+          <div class="price-label">Tendance</div>
+          <div class="price-value" id="priceTrend">—</div>
+        </div>
+        <div class="price-item">
+          <div class="price-label">Moyen</div>
+          <div class="price-value" id="priceAvg">—</div>
+        </div>
+      </div>
+      <a class="cardmarket-link" id="cardmarketLink" href="#" target="_blank" rel="noopener">
+        🔗 Voir sur Cardmarket
+      </a>
+    </div>
+  </div>
+
+  <p class="info-note">
+    Les prix sont récupérés depuis Cardmarket via une API proxy publique.<br>
+    Aucune clé API requise — propulsé par Claude Vision.
+  </p>
+</main>
+
+<script>
+let stream = null;
+let cameraActive = false;
+let capturedDataUrl = null;
+
+// ── Camera ──────────────────────────────────────────────
+async function toggleCamera() {
+  if (cameraActive) {
+    stopCamera();
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+    });
+    const video = document.getElementById('videoEl');
+    video.srcObject = stream;
+    video.classList.add('active');
+    document.getElementById('previewImg').classList.remove('active');
+    document.getElementById('scannerIdle').classList.add('hidden');
+    document.getElementById('scanLine').classList.add('active');
+    document.getElementById('btnCamera').textContent = '⏹ Arrêter';
+    document.getElementById('btnCapture').disabled = false;
+    document.getElementById('btnCapture').textContent = '⚡ Capturer';
+    cameraActive = true;
+    capturedDataUrl = null;
+    hideResult();
+  } catch (e) {
+    showError("Impossible d'accéder à la caméra. Vérifie les permissions du navigateur.");
+  }
+}
+
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const video = document.getElementById('videoEl');
+  video.classList.remove('active');
+  document.getElementById('scanLine').classList.remove('active');
+  document.getElementById('btnCamera').textContent = '📷 Caméra';
+  cameraActive = false;
+  if (!capturedDataUrl) {
+    document.getElementById('scannerIdle').classList.remove('hidden');
+    document.getElementById('btnCapture').disabled = true;
+  }
+}
+
+// ── Capture from video ───────────────────────────────────
+function capture() {
+  if (cameraActive) {
+    const video = document.getElementById('videoEl');
+    const canvas = document.getElementById('captureCanvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    capturedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    // Show preview
+    const preview = document.getElementById('previewImg');
+    preview.src = capturedDataUrl;
+    preview.classList.add('active');
+    stopCamera();
+    document.getElementById('btnCapture').textContent = '⚡ Analyser';
+    document.getElementById('btnCapture').disabled = false;
+
+    // Show reset button
+    document.getElementById('btnReset').style.display = 'flex';
+  } else if (capturedDataUrl) {
+    analyzeCard(capturedDataUrl);
+  }
+}
+
+// ── File upload ──────────────────────────────────────────
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    capturedDataUrl = e.target.result;
+    const preview = document.getElementById('previewImg');
+    preview.src = capturedDataUrl;
+    preview.classList.add('active');
+    document.getElementById('scannerIdle').classList.add('hidden');
+    document.getElementById('videoEl').classList.remove('active');
+    document.getElementById('btnCapture').disabled = false;
+    document.getElementById('btnCapture').textContent = '⚡ Analyser';
+    document.getElementById('btnReset').style.display = 'flex';
+    hideResult();
+    if (cameraActive) stopCamera();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Reset ────────────────────────────────────────────────
+function reset() {
+  stopCamera();
+  capturedDataUrl = null;
+  const preview = document.getElementById('previewImg');
+  preview.classList.remove('active');
+  preview.src = '';
+  document.getElementById('scannerIdle').classList.remove('hidden');
+  document.getElementById('btnCapture').disabled = true;
+  document.getElementById('btnCapture').textContent = '⚡ Analyser';
+  document.getElementById('btnReset').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  hideResult();
+  hideError();
+  hideStatus();
+}
+
+// ── Claude Vision analysis ───────────────────────────────
+async function analyzeCard(dataUrl) {
+  showStatus('Claude analyse l\'image…');
+  hideError();
+  hideResult();
+
+  // Strip data URL prefix
+  const base64 = dataUrl.split(',')[1];
+  const mediaType = dataUrl.match(/data:([^;]+);/)[1];
+
+  let identified = null;
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64 }
+            },
+            {
+              type: 'text',
+              text: `Tu es un expert en cartes Pokémon. Identifie précisément cette carte et réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
+
+Format attendu :
+{
+  "name": "Nom du Pokémon en français",
+  "nameEn": "Nom en anglais (pour recherche)",
+  "set": "Nom de l'extension",
+  "setCode": "Code de l'extension si visible (ex: sv1, swsh1...)",
+  "number": "Numéro de la carte si visible (ex: 001/165)",
+  "rarity": "Rareté (Commune, Peu commune, Rare, Ultra Rare, etc.)",
+  "type": "Type(s) de la carte",
+  "isHolo": true/false,
+  "cardmarketSearch": "Terme de recherche Cardmarket optimisé (nom anglais + numéro si connu)",
+  "confidence": "high/medium/low"
+}
+
+Si tu ne peux pas identifier la carte, mets confidence à "low" et mets ce que tu peux.`
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content[0].text.trim();
+    const clean = text.replace(/```json|```/g, '').trim();
+    identified = JSON.parse(clean);
+  } catch (e) {
+    showError('Impossible d\'identifier la carte. Essaie avec une meilleure photo (bonne lumière, carte bien droite).');
+    hideStatus();
+    return;
+  }
+
+  // ── Fetch Cardmarket price ──
+  showStatus('Recherche des prix sur Cardmarket…');
+  await fetchCardmarketPrice(identified);
+}
+
+// ── Cardmarket price fetch ───────────────────────────────
+async function fetchCardmarketPrice(card) {
+  // Build Cardmarket search URL
+  const searchTerm = encodeURIComponent(card.cardmarketSearch || card.nameEn || card.name);
+  const cmUrl = `https://www.cardmarket.com/fr/Pokemon/Products/Singles?searchString=${searchTerm}`;
+
+  // Use a CORS proxy to fetch Cardmarket
+  // We'll use the allorigins proxy (free, public)
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(cmUrl)}`;
+
+  let prices = { low: null, trend: null, avg: null, directUrl: cmUrl };
+
+  try {
+    const resp = await fetch(proxyUrl);
+    const json = await resp.json();
+    const html = json.contents || '';
+
+    // Parse prices from Cardmarket HTML
+    // Look for price patterns in the search results
+    const priceMatches = html.match(/(\d+[,\.]\d{2})\s*€/g);
+    if (priceMatches && priceMatches.length > 0) {
+      const nums = priceMatches
+        .map(p => parseFloat(p.replace('€','').replace(',','.').trim()))
+        .filter(n => !isNaN(n) && n > 0 && n < 5000)
+        .sort((a,b) => a - b);
+
+      if (nums.length > 0) {
+        prices.low = nums[0].toFixed(2) + ' €';
+        prices.avg = (nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2) + ' €';
+        prices.trend = nums[Math.floor(nums.length * 0.5)].toFixed(2) + ' €';
+      }
+    }
+
+    // Try to get direct link to first result
+    const linkMatch = html.match(/href="(\/fr\/Pokemon\/Products\/Singles\/[^"]+)"/);
+    if (linkMatch) {
+      prices.directUrl = 'https://www.cardmarket.com' + linkMatch[1];
+    }
+
+  } catch (e) {
+    // Proxy failed — show result without prices
+  }
+
+  displayResult(card, prices);
+}
+
+// ── Display result ───────────────────────────────────────
+function displayResult(card, prices) {
+  hideStatus();
+
+  document.getElementById('cardName').textContent = card.name + (card.isHolo ? ' ✨' : '');
+
+  let setInfo = card.set || '';
+  if (card.number) setInfo += ' · ' + card.number;
+  if (card.rarity) setInfo += ' · ' + card.rarity;
+  document.getElementById('cardSet').textContent = setInfo || 'Extension inconnue';
+
+  document.getElementById('priceLow').textContent   = prices.low   || '—';
+  document.getElementById('priceTrend').textContent = prices.trend || '—';
+  document.getElementById('priceAvg').textContent   = prices.avg   || '—';
+
+  const link = document.getElementById('cardmarketLink');
+  link.href = prices.directUrl;
+
+  const rc = document.getElementById('resultCard');
+  rc.classList.add('visible');
+
+  if (!prices.low) {
+    showError('Les prix n\'ont pas pu être récupérés automatiquement. Clique sur le lien Cardmarket pour les consulter.');
+  }
+}
+
+// ── UI helpers ───────────────────────────────────────────
+function showStatus(msg) {
+  document.getElementById('statusText').textContent = msg;
+  document.getElementById('statusBox').classList.add('visible');
+}
+function hideStatus() { document.getElementById('statusBox').classList.remove('visible'); }
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideError() { document.getElementById('errorBox').classList.remove('visible'); }
+function hideResult() { document.getElementById('resultCard').classList.remove('visible'); }
+
+// Override capture to trigger analysis when already have image
+document.getElementById('btnCapture').addEventListener('click', function() {
+  if (!cameraActive && capturedDataUrl) {
+    analyzeCard(capturedDataUrl);
+  } else if (cameraActive) {
+    capture();
+  }
+}, true);
+// Remove inline onclick to avoid double call
+document.getElementById('btnCapture').removeAttribute('onclick');
+</script>
+</body>
+</html>
