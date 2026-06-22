@@ -433,7 +433,7 @@
 
 <script>
 // ← REMPLACE PAR L'URL DE TON CLOUDFLARE WORKER
-const PROXY_URL = 'https://hidden-frost-7e55.remi-bergay.workers.dev/';
+const PROXY_URL = 'https://hidden-frost-7e55.remi-bergay.workers.dev';
 
 let stream = null;
 let cameraActive = false;
@@ -592,13 +592,18 @@ Si tu ne peux pas identifier la carte, mets confidence à "low" et mets ce que t
       })
     });
 
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Proxy ${response.status}: ${errText}`);
+    }
     const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    if (!data.content || !data.content[0]) throw new Error('Réponse vide de Claude.');
     const text = data.content[0].text.trim();
     const clean = text.replace(/```json|```/g, '').trim();
     identified = JSON.parse(clean);
   } catch (e) {
-    showError('Impossible d\'identifier la carte. Essaie avec une meilleure photo (bonne lumière, carte bien droite).');
+    showError('Erreur : ' + e.message);
     hideStatus();
     return;
   }
