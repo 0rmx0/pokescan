@@ -432,6 +432,9 @@
 </main>
 
 <script>
+// ← REMPLACE PAR L'URL DE TON CLOUDFLARE WORKER
+const PROXY_URL = 'https://hidden-frost-7e55.remi-bergay.workers.dev/';
+
 let stream = null;
 let cameraActive = false;
 let capturedDataUrl = null;
@@ -551,7 +554,7 @@ async function analyzeCard(dataUrl) {
 
   let identified = null;
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
