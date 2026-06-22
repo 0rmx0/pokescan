@@ -542,66 +542,40 @@ function reset() {
   hideStatus();
 }
 
-// ── Claude Vision analysis ───────────────────────────────
+// ── Hugging Face Vision analysis ────────────────────────
 async function analyzeCard(dataUrl) {
-  showStatus('Claude analyse l\'image…');
+  showStatus('Analyse de la carte en cours…');
   hideError();
   hideResult();
 
-  // Strip data URL prefix
   const base64 = dataUrl.split(',')[1];
-  const mediaType = dataUrl.match(/data:([^;]+);/)[1];
 
   let identified = null;
   try {
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64 }
-            },
-            {
-              type: 'text',
-              text: `Tu es un expert en cartes Pokémon. Identifie précisément cette carte et réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
-
-Format attendu :
-{
-  "name": "Nom du Pokémon en français",
-  "nameEn": "Nom en anglais (pour recherche)",
-  "set": "Nom de l'extension",
-  "setCode": "Code de l'extension si visible (ex: sv1, swsh1...)",
-  "number": "Numéro de la carte si visible (ex: 001/165)",
-  "rarity": "Rareté (Commune, Peu commune, Rare, Ultra Rare, etc.)",
-  "type": "Type(s) de la carte",
-  "isHolo": true/false,
-  "cardmarketSearch": "Terme de recherche Cardmarket optimisé (nom anglais + numéro si connu)",
-  "confidence": "high/medium/low"
-}
-
-Si tu ne peux pas identifier la carte, mets confidence à "low" et mets ce que tu peux.`
-            }
-          ]
-        }]
-      })
+      body: JSON.stringify({ image: base64 })
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Proxy ${response.status}: ${errText}`);
-    }
     const data = await response.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    if (!data.content || !data.content[0]) throw new Error('Réponse vide de Claude.');
-    const text = data.content[0].text.trim();
-    const clean = text.replace(/```json|```/g, '').trim();
-    identified = JSON.parse(clean);
+
+    if (response.status === 503 && data.loading) {
+      showError('Le modèle IA se réveille, réessaie dans 20 secondes ☕');
+      hideStatus();
+      return;
+    }
+
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Erreur ' + response.status);
+    }
+
+    // Extraire le JSON de la réponse texte du modèle
+    const raw = data.text || '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Le modèle n\'a pas renvoyé de JSON valide. Réessaie avec une photo plus nette.');
+    identified = JSON.parse(jsonMatch[0]);
+
   } catch (e) {
     showError('Erreur : ' + e.message);
     hideStatus();
